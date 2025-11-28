@@ -4,10 +4,11 @@ from typing import BinaryIO
 import regex as re
 from multiprocessing import Process, Queue
 
+
 def find_chunk_boundaries(
-    file: BinaryIO,
-    desired_num_chunks: int,
-    split_special_token: bytes,
+        file: BinaryIO,
+        desired_num_chunks: int,
+        split_special_token: bytes,
 ) -> list[int]:
     """
     Chunk the file into parts that can be counted independently.
@@ -50,8 +51,24 @@ def find_chunk_boundaries(
     # Make sure all boundaries are unique, but might be fewer than desired_num_chunks
     return sorted(set(chunk_boundaries))
 
+
+def pre_tokenize_remove_special_tokens(
+        chunk: str, special_tokens: list[str]
+) -> str:
+    special_tokens_escape = [re.escape(token) for token in special_tokens]
+    print(special_tokens_escape)
+    pattern = re.compile("|".join(special_tokens_escape))
+
+    chunk_wo_special_tokens = re.sub(pattern, "", chunk)
+
+    print(chunk_wo_special_tokens)
+    return chunk_wo_special_tokens
+
+
 PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
-def pre_tokenize_split_chunk(chunk: bytes) -> dict[bytes, int]:
+
+
+def pre_tokenize_split_chunk(chunk: str) -> dict[bytes, int]:
     res = {}
     for m in re.finditer(PAT, chunk):
         key = chunk[m.start(): m.end()]
@@ -61,17 +78,20 @@ def pre_tokenize_split_chunk(chunk: bytes) -> dict[bytes, int]:
             res[key] += 1
     return res
 
-def pre_tokenize_worker(file_path: str, start: int, end: int, q) -> dict[bytes, int]:
+
+def pre_tokenize_worker(file_path: str, start: int, end: int, special_tokens: list[str], q) -> None:
     with open(file_path, "rb") as f:
         f.seek(start)
         chunk = f.read(end - start).decode("utf-8", errors="ignore")
-        print(chunk)
-        q.put(pre_tokenize_split_chunk(chunk))
+        chunk_wo_special_tokens = pre_tokenize_remove_special_tokens(chunk, special_tokens)
+        q.put(pre_tokenize_split_chunk(chunk_wo_special_tokens))
         print("process done!")
 
+
 def pre_tokenize(
-    file_path: str,
-    num_processes: int,
+        file_path: str,
+        num_processes: int,
+        special_tokens: list[str],
 ) -> dict[bytes, int]:
     with open(file_path, "rb") as f:
         boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
@@ -80,9 +100,9 @@ def pre_tokenize(
         processes = []
         q = Queue()
         for start, end in zip(boundaries[:-1], boundaries[1:]):
-            p = Process(target=pre_tokenize_worker, args=(file_path, start, end, q))
+            p = Process(target=pre_tokenize_worker, args=(file_path, start, end, special_tokens, q))
             processes.append(p)
-            #pre_tokenize_worker(file_path, start, end, q)
+            # pre_tokenize_worker(file_path, start, end, q)
 
         for p in processes:
             p.start()
@@ -90,7 +110,7 @@ def pre_tokenize(
         for p in processes:
             p.join()
 
-        res= {}
+        res = {}
         while not q.empty():
             worker_res = q.get()
             for key, val in worker_res.items():
@@ -102,6 +122,8 @@ def pre_tokenize(
 
 
 if __name__ == "__main__":
-    pre_tokenize("./tests/fixtures/tinystories_sample.txt", 4)
+    pre_tokenize("./tests/fixtures/tinystories_sample.txt", 4, ["<|endoftext|>"])
 
-#pre_tokenize_split_chunk("some text that i'll pre-tokenize")
+# pre_tokenize_split_chunk("some text that i'll pre-tokenize")
+
+# pre_tokenize_remove_special_tokens("some text that i'll pre-tokenize", ["pre-tokenize"])
