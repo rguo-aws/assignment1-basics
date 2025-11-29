@@ -56,12 +56,12 @@ def pre_tokenize_remove_special_tokens(
         chunk: str, special_tokens: list[str]
 ) -> str:
     special_tokens_escape = [re.escape(token) for token in special_tokens]
-    print(special_tokens_escape)
+    #print(special_tokens_escape)
     pattern = re.compile("|".join(special_tokens_escape))
 
     chunk_wo_special_tokens = re.sub(pattern, "", chunk)
 
-    print(chunk_wo_special_tokens)
+    #print(chunk_wo_special_tokens)
     return chunk_wo_special_tokens
 
 
