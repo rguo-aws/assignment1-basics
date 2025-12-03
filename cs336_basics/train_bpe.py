@@ -25,17 +25,22 @@ class VocabList:
     def exists(self, word: bytes) -> bool:
         return word in self.vocab_set
 
-def find_largest_token(count_dict: dict[bytes, int]) -> Optional[bytes]:
+def find_largest_token(count_dict: dict[tuple[bytes, bytes], int]) -> Optional[tuple[bytes, bytes]]:
     if len(count_dict) == 0:
         return None
-    #print(count_dict)
-    res = max(count_dict.items(), key=lambda kv: (kv[1], kv[0]))[0]
-    if count_dict[res] <= 0:
+    max_token, max_count = max(
+        count_dict.items(),
+        key=lambda kv: (
+            kv[1],  # highest count first
+            (kv[0][0] + kv[0][1])  # smallest lexicographic combined bytes
+        )
+    )
+    if max_count <= 0:
         return None
-    return res
+    return max_token
 
 
-def decrease_cnt(token: bytes, val: int, count_dict: dict[bytes, int]):
+def decrease_cnt(token: tuple[bytes, bytes], val: int, count_dict: dict[tuple[bytes, bytes], int]):
     if token in count_dict:
         #print(f"token : {token},v = {val} before : {count_dict[token]}")
         count_dict[token] -= val
@@ -45,29 +50,29 @@ def decrease_cnt(token: bytes, val: int, count_dict: dict[bytes, int]):
         #print(count_dict)
 
 
-def increase_cnt(token: bytes, pre_token: PreToken, count_dict: dict[bytes, int], token_idx: dict[bytes, set[PreToken]]):
+def increase_cnt(token: tuple[bytes,bytes], pre_token: PreToken, count_dict: dict[tuple[bytes,bytes], int], token_idx: dict[bytes, set[PreToken]]):
     if token not in count_dict:
         count_dict[token] = 0
     count_dict[token] += pre_token.count
-    if token not in token_idx:
-        token_idx[token] = set()
-    token_idx[token].add(pre_token)
+    token_str = token[0] + token[1]
+    if token_str not in token_idx:
+        token_idx[token_str] = set()
+    token_idx[token_str].add(pre_token)
 
 
-def replace_iter(largest_token: bytes, pre_token: PreToken, count_dict: dict[bytes, int], token_idx: dict[bytes, set[PreToken]]):
+def replace_iter(largest_token: tuple[bytes, bytes], pre_token: PreToken, count_dict: dict[tuple[bytes, bytes], int], token_idx: dict[bytes, set[PreToken]]):
     found = False
     for i in range(len(pre_token.tokens) -1):
-        if largest_token != pre_token.tokens[i] + pre_token.tokens[i + 1]:
+        if largest_token[0] + largest_token[1] != pre_token.tokens[i] + pre_token.tokens[i + 1]:
             continue
         if i > 0:
-            new_token = pre_token.tokens[i - 1] + largest_token
-            print(f"new token = {new_token}, pre = {pre_token.tokens[i - 1]}, largest = {largest_token}")
-            decrease_cnt(pre_token.tokens[i - 1] + pre_token.tokens[i], pre_token.count, count_dict)
-            increase_cnt(new_token, pre_token, count_dict, token_idx)
+            #print(f"new token = {new_token}, pre = {pre_token.tokens[i - 1]}, largest = {largest_token}")
+            decrease_cnt((pre_token.tokens[i - 1],  pre_token.tokens[i]), pre_token.count, count_dict)
+            increase_cnt((pre_token.tokens[i - 1], largest_token[0] + largest_token[1]), pre_token, count_dict, token_idx)
         if i < len(pre_token.tokens) - 2:
-            new_token = largest_token + pre_token.tokens[i + 2]
-            decrease_cnt(pre_token.tokens[i + 1] + pre_token.tokens[i + 2], pre_token.count, count_dict)
-            increase_cnt(new_token, pre_token, count_dict, token_idx)
+            new_token = largest_token[0] + largest_token[1] + pre_token.tokens[i + 2]
+            decrease_cnt((pre_token.tokens[i + 1], pre_token.tokens[i + 2]), pre_token.count, count_dict)
+            increase_cnt((largest_token[0] + largest_token[1],  pre_token.tokens[i + 2]), pre_token, count_dict, token_idx)
         #print(f"decreasing token {largest_token} by {pre_token.count}")
         decrease_cnt(largest_token, pre_token.count, count_dict)
         pre_token.tokens = pre_token.tokens[:i] + [pre_token.tokens[i] + pre_token.tokens[i+1]] + pre_token.tokens[i+2:]
@@ -76,7 +81,7 @@ def replace_iter(largest_token: bytes, pre_token: PreToken, count_dict: dict[byt
     return found
 
 
-def replace(largest_token: bytes, pre_token: PreToken, count_dict: dict[bytes, int],
+def replace(largest_token: tuple[bytes, bytes], pre_token: PreToken, count_dict: dict[tuple[bytes, bytes], int],
                  token_idx: dict[bytes, set[PreToken]]):
     #print(f"replacing token : {pre_token.tokens}, largest_token = {largest_token}")
     while replace_iter(largest_token, pre_token, count_dict, token_idx):
@@ -84,14 +89,15 @@ def replace(largest_token: bytes, pre_token: PreToken, count_dict: dict[bytes, i
 
 
 
-def merge(count_dict: dict[bytes, int], vocab: VocabList, token_idx: dict[bytes, set[PreToken]]) -> bool:
-    largest_token = find_largest_token(count_dict)
-    print(f"Merging vocab : {largest_token}")
-    if largest_token is None:
+def merge(count_dict: dict[tuple[bytes, bytes], int], vocab: VocabList, token_idx: dict[bytes, set[PreToken]]) -> bool:
+    largest_token_tuple = find_largest_token(count_dict)
+    if largest_token_tuple is None:
         return False
+    print(f"Merging vocab : {largest_token_tuple[0]} + {largest_token_tuple[1]}")
+    largest_token = largest_token_tuple[0] + largest_token_tuple[1]
     if vocab.exists(largest_token):
-        if largest_token in count_dict:
-            count_dict.pop(largest_token)
+        if largest_token_tuple in count_dict:
+            count_dict.pop(largest_token_tuple)
         return True
     print(f"Adding vocab : {largest_token} , type : {type(largest_token)}")
     vocab.add(largest_token)
@@ -101,11 +107,11 @@ def merge(count_dict: dict[bytes, int], vocab: VocabList, token_idx: dict[bytes,
         return True
 
     for pre_token in token_idx[largest_token]:
-        replace(largest_token, pre_token, count_dict, token_idx)
+        replace(largest_token_tuple, pre_token, count_dict, token_idx)
 
     token_idx.pop(largest_token)
     if largest_token in count_dict:
-        count_dict.pop(largest_token)
+        count_dict.pop(largest_token_tuple)
     return True
 
 
@@ -125,7 +131,7 @@ def train_bpe(input_path: str, vocab_size: int, special_tokens: list[str]) -> tu
 
     pre_tokens = pre_tokenize(input_path, 4, special_tokens)
     token_idx: dict[bytes, set[PreToken]] = {}
-    count_dict: dict[bytes, int] = {}
+    count_dict: dict[tuple[bytes, bytes], int] = {}
 
     idx = 0
     for k, v in pre_tokens.items():
@@ -139,17 +145,17 @@ def train_bpe(input_path: str, vocab_size: int, special_tokens: list[str]) -> tu
             continue
 
         for i in range(len(k_bytes) - 1):
-            tokens.append(k_bytes[i:i + 2])
-        # print(tokens)
+            tokens.append((k_bytes[i:i+1], k_bytes[i+1:i+2]))
         pre_token = PreToken(k_bytes, v)
-        for token in tokens:
+        for token_tuple in tokens:
+            token = token_tuple[0] + token_tuple[1]
             if token not in token_idx:
                 token_idx[token] = set()
             token_idx[token].add(pre_token)
 
-            if token not in count_dict:
-                count_dict[token] = 0
-            count_dict[token] += v
+            if token_tuple not in count_dict:
+                count_dict[token_tuple] = 0
+            count_dict[token_tuple] += v
 
     # print(count_dict)
     # for k, v in token_idx.items():
