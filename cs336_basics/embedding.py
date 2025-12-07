@@ -18,9 +18,7 @@ class Embedding(Module):
         init.trunc_normal_(self.weight, mean=0.0, std=std, a=-3.0, b=3.0)
 
     def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
-        # y = W @ x
         selected = self.weight[token_ids]
-        print(selected)
         return selected
 
 
