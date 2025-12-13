@@ -1,10 +1,12 @@
 import torch
 from torch.nn import Module
+from torch import Tensor
 import torch.nn.init as init
 
 from einops import einsum, repeat
 
-import math
+from jaxtyping import Bool, Float, Int
+
 
 class RotaryPositionalEmbedding(Module):
     def __init__(self, theta: float, d_k: int, max_seq_len: int, device=None):
@@ -27,7 +29,8 @@ class RotaryPositionalEmbedding(Module):
         self.register_buffer("sin", sin, persistent=False)
         self.register_buffer("cos", cos, persistent=False)
 
-    def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: Float[Tensor, "... sequence_length d_k"],
+                token_positions: Int[Tensor, "... sequence_length"]) -> Float[Tensor, " ... sequence_length d_k"]:
         # Gather sin/cos for each token position
         # sin, cos: (max_seq_len, d_k/2)
         sin_pos = self.sin[token_positions]  # shape: (..., seq_len, d_k/2)

@@ -21,6 +21,7 @@ def scaled_dot_product_attention(Q: torch.Tensor, K: torch.Tensor, V: torch.Tens
     Q_K = einsum(Q, K, " ... queries d_k, ... keys d_k -> ... queries keys")
     Q_K = Q_K / (K.shape[-1] ** 0.5)
     if mask is not None:
+        print(f"!!!! Q_K size = {Q_K.size()}")
         mask_v = torch.where(mask, torch.tensor(0.0), torch.tensor(float('-inf')))
         Q_K_masked = mask_v + Q_K
     else:
