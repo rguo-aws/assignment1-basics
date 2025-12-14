@@ -17,6 +17,7 @@ from cs336_basics.swiglu import SwiGLU
 from cs336_basics.rope import RotaryPositionalEmbedding
 from cs336_basics.multihead_self_attention import MultiheadSelfAttention
 from cs336_basics.utils import softmax, scaled_dot_product_attention
+from cs336_basics.transformer_block import TransformerBlock
 
 def run_linear(
     d_in: int,
@@ -318,7 +319,26 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    raise NotImplementedError
+    B, S, _ = in_features.shape
+    #assert S == max_seq_len, f"{S} != {max_seq_len}"
+
+    transformer = TransformerBlock(d_model = d_model, num_heads = num_heads, d_ff = d_ff, max_seq_len = S, theta = theta)
+
+    transformer.load_state_dict({
+        "attn.q_proj.weight": weights["attn.q_proj.weight"],
+        "attn.k_proj.weight": weights["attn.k_proj.weight"],
+        "attn.v_proj.weight": weights["attn.v_proj.weight"],
+        "attn.o_proj.weight": weights["attn.output_proj.weight"],
+        "norm1.weight": weights["ln1.weight"],
+        "norm2.weight": weights["ln2.weight"],
+        "ffn.w1_weight": weights["ffn.w1.weight"],
+        "ffn.w2_weight": weights["ffn.w2.weight"],
+        "ffn.w3_weight": weights["ffn.w3.weight"],
+    })
+    position_ids = torch.arange(S, device=in_features.device).unsqueeze(0)
+    position_ids = position_ids.expand(B, S)
+    res = transformer(in_features, position_ids)
+    return res
 
 
 def run_transformer_lm(

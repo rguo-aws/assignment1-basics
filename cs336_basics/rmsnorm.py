@@ -1,4 +1,5 @@
 import torch
+from torch import Tensor
 from torch.nn import Module
 import torch.nn.init as init
 
@@ -6,6 +7,8 @@ from einops import einsum
 from einops import reduce
 
 import math
+
+from jaxtyping import Bool, Float, Int
 
 class RMSNorm(Module):
     def __init__(self, d_model: int, eps: float = 1e-5, device=None, dtype=None):
@@ -18,7 +21,7 @@ class RMSNorm(Module):
         std = math.sqrt(2.0 / d_model)
         init.trunc_normal_(self.weight, mean=0.0, std=std, a=-3.0, b=3.0)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: Float[Tensor, " ... d_model"]) -> Float[Tensor, " ... d_model"]:
         in_dtype = x.dtype
         x = x.to(torch.float32)
         x_sq = x ** 2
