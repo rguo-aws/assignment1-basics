@@ -1,4 +1,6 @@
 import torch
+from jaxtyping import Float, Int
+from torch import Tensor
 from torch.nn import Module
 import torch.nn.init as init
 
@@ -17,7 +19,7 @@ class Embedding(Module):
         std = math.sqrt(2.0 / (num_embeddings + embedding_dim))
         init.trunc_normal_(self.weight, mean=0.0, std=std, a=-3.0, b=3.0)
 
-    def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
+    def forward(self, token_ids: Int[Tensor, "..."]) -> Float[Tensor, "... d_model"]:
         selected = self.weight[token_ids]
         return selected
 
