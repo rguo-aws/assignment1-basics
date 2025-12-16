@@ -1,11 +1,13 @@
 import torch
+from torch import Tensor
+from jaxtyping import Float, Int
 from torch.nn import Module
 import torch.nn.init as init
 
 from einops import einsum
 
 
-def softmax(x: torch.Tensor, dim: int) -> torch.Tensor:
+def softmax(x: Float[Tensor, " ..."], dim: int) -> Float[Tensor, " ..."]:
     max_val = x.max(dim=dim, keepdim=True).values
     x_offset = x - max_val
 
@@ -29,6 +31,19 @@ def scaled_dot_product_attention(Q: torch.Tensor, K: torch.Tensor, V: torch.Tens
     Q_K_softmax = softmax(Q_K_masked, dim=-1)
     Q_K_V = einsum(Q_K_softmax, V, " ... queries k, ... k d_v -> ... queries d_v")
     return Q_K_V
+
+def cross_entropy_loss(logits: Float[Tensor, " batch_size vocab_size"], targets: Int[Tensor, " batch_size"]) -> Float[Tensor, ""]:
+    B, V = logits.shape
+
+    #sm_res : Float[Tensor, " batch_size vocab_size"] = softmax(logits, dim=-1)
+    z_max = logits.max(dim=-1, keepdim=True).values
+    logsumexp = torch.log(torch.sum(torch.exp(logits - z_max), dim=-1, keepdim=True)) + z_max
+    log_softmax = logits - logsumexp
+
+    idx = torch.arange(B)
+
+    loss = -log_softmax[idx, targets]
+    return loss.mean()
 
 
 if __name__ == "__main__":
