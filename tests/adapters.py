@@ -16,7 +16,8 @@ from cs336_basics.rmsnorm import RMSNorm
 from cs336_basics.swiglu import SwiGLU
 from cs336_basics.rope import RotaryPositionalEmbedding
 from cs336_basics.multihead_self_attention import MultiheadSelfAttention
-from cs336_basics.utils import softmax, scaled_dot_product_attention, cross_entropy_loss
+from cs336_basics.utils import softmax, scaled_dot_product_attention, cross_entropy_loss, learning_rate_schedule, \
+    gradient_clipping
 from cs336_basics.transformer_block import TransformerBlock
 from cs336_basics.transformer_lm import TransformerLM
 from cs336_basics.optimizer import AdamW
@@ -453,8 +454,6 @@ def run_transformer_lm(
     return res
 
 
-
-
 def run_rmsnorm(
         d_model: int,
         eps: float,
@@ -564,7 +563,8 @@ def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm:
 
     The gradients of the parameters (parameter.grad) should be modified in-place.
     """
-    raise NotImplementedError
+    gradient_clipping(parameters, max_l2_norm)
+    return
 
 
 def get_adamw_cls() -> Any:
@@ -599,7 +599,8 @@ def run_get_lr_cosine_schedule(
     Returns:
         Learning rate at the given iteration under the specified schedule.
     """
-    raise NotImplementedError
+    return learning_rate_schedule(t=it, lr_max=max_learning_rate, lr_min=min_learning_rate, t_w=warmup_iters,
+                                  t_c=cosine_cycle_iters)
 
 
 def run_save_checkpoint(
