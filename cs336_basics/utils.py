@@ -1,5 +1,8 @@
+import os
+import typing
 from typing import Iterable
 
+import numpy.typing as npt
 import torch
 from torch import Tensor
 from jaxtyping import Float, Int
@@ -23,6 +26,7 @@ def softmax(x: Float[Tensor, " ..."], dim: int) -> Float[Tensor, " ..."]:
     res = e_x / e_x_sum
     return res
 
+
 def scaled_dot_product_attention(Q: torch.Tensor, K: torch.Tensor, V: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
     Q_K = einsum(Q, K, " ... queries d_k, ... keys d_k -> ... queries keys")
     Q_K = Q_K / (K.shape[-1] ** 0.5)
@@ -36,10 +40,12 @@ def scaled_dot_product_attention(Q: torch.Tensor, K: torch.Tensor, V: torch.Tens
     Q_K_V = einsum(Q_K_softmax, V, " ... queries k, ... k d_v -> ... queries d_v")
     return Q_K_V
 
-def cross_entropy_loss(logits: Float[Tensor, " batch_size vocab_size"], targets: Int[Tensor, " batch_size"]) -> Float[Tensor, ""]:
+
+def cross_entropy_loss(logits: Float[Tensor, " batch_size vocab_size"], targets: Int[Tensor, " batch_size"]) -> Float[
+    Tensor, ""]:
     B, V = logits.shape
 
-    #sm_res : Float[Tensor, " batch_size vocab_size"] = softmax(logits, dim=-1)
+    # sm_res : Float[Tensor, " batch_size vocab_size"] = softmax(logits, dim=-1)
     z_max = logits.max(dim=-1, keepdim=True).values
     logsumexp = torch.log(torch.sum(torch.exp(logits - z_max), dim=-1, keepdim=True)) + z_max
     log_softmax = logits - logsumexp
@@ -54,9 +60,10 @@ def learning_rate_schedule(t: int, lr_max: float, lr_min: float, t_w: int, t_c: 
     if t < t_w:
         return t / t_w * lr_max
     elif t < t_c:
-        return lr_min + 0.5*(1 + math.cos((t - t_w) / (t_c - t_w) * math.pi)) * (lr_max - lr_min)
+        return lr_min + 0.5 * (1 + math.cos((t - t_w) / (t_c - t_w) * math.pi)) * (lr_max - lr_min)
     else:
         return lr_min
+
 
 def gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm: float):
     norm_sum = 0
@@ -73,7 +80,30 @@ def gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm: flo
             p.grad.detach().mul_(max_l2_norm / (total_norm_2 + 1e-6))
 
 
+def data_loading(dataset: npt.NDArray, batch_size: int, context_length: int, device: str) -> tuple[
+    torch.Tensor, torch.Tensor]:
+    sz = len(dataset)
+    start_idxs = torch.randint(0, sz - context_length, (batch_size,))
 
+    input_seqs = torch.stack([torch.from_numpy(dataset[st: st + context_length]) for st in start_idxs]).to(device)
+    labels = torch.stack([torch.from_numpy(dataset[st + 1: st + context_length + 1]) for st in start_idxs]).to(device)
+    return input_seqs, labels
+
+
+def save_checkpoint(model: torch.nn.Module, optimizer: torch.optim.Optimizer, iteration: int,
+                    out: str | os.PathLike | typing.BinaryIO | typing.IO[bytes]):
+    torch.save(obj={
+        'model': model.state_dict(),
+        'optimizer': optimizer.state_dict(),
+        'iteration': iteration,
+    }, f=out)
+
+def load_checkpoint(src, model, optimizer) -> int:
+    checkpoint = torch.load(src)
+    model.load_state_dict(checkpoint['model'])
+    optimizer.load_state_dict(checkpoint['optimizer'])
+    iteration = checkpoint['iteration']
+    return iteration
 
 if __name__ == "__main__":
     x = torch.randn(2, 3, 4)
